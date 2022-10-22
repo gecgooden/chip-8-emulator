@@ -8,6 +8,7 @@ extern crate opengl_graphics;
 extern crate piston;
 
 use glutin_window::GlutinWindow;
+use graphics::clear;
 use graphics::rectangle;
 
 use opengl_graphics::{GlGraphics, OpenGL};
@@ -16,6 +17,8 @@ use piston::input::{RenderEvent, UpdateEvent};
 use piston::window::WindowSettings;
 use piston::EventLoop;
 use piston::PressEvent;
+use piston::ReleaseEvent;
+use piston::Window;
 
 fn main() {
     // Change this to OpenGL::V2_1 if not working.
@@ -78,6 +81,9 @@ fn main() {
     let mut stack = Vec::new();
 
     let mut program_counter = 0x200;
+    let mut delay_timer: u8 = 0;
+    let mut sound_timer: u8 = 0;
+    let mut keys = [false; 16];
 
     let mut events = Events::new(EventSettings::new());
     events.set_ups(500);
@@ -85,21 +91,60 @@ fn main() {
     // events.set_max_fps(240);
     println!("{:?}", events.get_event_settings());
     use piston::input::{Button, Key};
-
+    const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+    const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     while let Some(e) = events.next(&mut window) {
         if let Some(Button::Keyboard(key)) = e.press_args() {
-            println!("{}", Key::code(&key));
+            match &key {
+                Key::D1 => keys[0x1] = true,
+                Key::D2 => keys[0x2] = true,
+                Key::D3 => keys[0x3] = true,
+                Key::D4 => keys[0xC] = true,
+                Key::Q => keys[0x4] = true,
+                Key::W => keys[0x5] = true,
+                Key::E => keys[0x6] = true,
+                Key::R => keys[0xD] = true,
+                Key::A => keys[0x7] = true,
+                Key::S => keys[0x8] = true,
+                Key::D => keys[0x9] = true,
+                Key::F => keys[0xE] = true,
+                Key::Z => keys[0xA] = true,
+                Key::X => keys[0x0] = true,
+                Key::C => keys[0xB] = true,
+                Key::V => keys[0xF] = true,
+                _ => {}
+            }
         }
+        if let Some(Button::Keyboard(key)) = e.release_args() {
+            match &key {
+                Key::D1 => keys[0x1] = false,
+                Key::D2 => keys[0x2] = false,
+                Key::D3 => keys[0x3] = false,
+                Key::D4 => keys[0xC] = false,
+                Key::Q => keys[0x4] = false,
+                Key::W => keys[0x5] = false,
+                Key::E => keys[0x6] = false,
+                Key::R => keys[0xD] = false,
+                Key::A => keys[0x7] = false,
+                Key::S => keys[0x8] = false,
+                Key::D => keys[0x9] = false,
+                Key::F => keys[0xE] = false,
+                Key::Z => keys[0xA] = false,
+                Key::X => keys[0x0] = false,
+                Key::C => keys[0xB] = false,
+                Key::V => keys[0xF] = false,
+                _ => {}
+            }
+        }
+
         if let Some(args) = e.render_args() {
-            // println!("{}", args.ext_dt);
-            const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
-            const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
             gl.draw(args.viewport(), |c, gl| {
-                for (y, row) in display.iter().enumerate() {
-                    for (x, pixel) in row.iter().enumerate() {
+                clear(BLACK, gl);
+                for x in 0..64 {
+                    for y in 0..32 {
                         let square = rectangle::square((x as f64) * 10.0, (y as f64) * 10.0, 10.0);
                         rectangle(
-                            if *pixel == true { WHITE } else { BLACK },
+                            if display[y][x] == true { WHITE } else { BLACK },
                             square,
                             c.transform,
                             gl,
@@ -198,7 +243,6 @@ fn main() {
                             program_counter += 2;
                         }
                         0x04 => {
-                            // println!("matched 0x04 (0xFXY4)");
                             let x_register = opcode.to_be_bytes()[0] & 0x0F;
                             let y_register = (opcode & 0x00F0) / 16;
                             let x = registers[x_register as usize] as u16;
@@ -266,7 +310,6 @@ fn main() {
                     program_counter += 2;
                 }
                 0xD000..=0xDFFF => {
-                    // println!("matched 0xD000..0xDFFF");
                     let x = registers[(opcode.to_be_bytes()[0] & 0x0F) as usize];
                     let y = registers[((opcode & 0x00F0) / 16) as usize];
                     let height = opcode.to_be_bytes()[1] & 0x0F;
@@ -274,30 +317,108 @@ fn main() {
                     for i in 0..height {
                         let pixel = memory[(index_register + (i as u16)) as usize];
                         for j in 0..8 {
-                            if (pixel & (0x80 >> j)) != 0 {
-                                if display[(y + i) as usize][(x + j) as usize] {
-                                    registers[0x0F] = 1;
+                            if (y + i) < 32 {
+                                if (pixel & (0x80 >> j)) != 0 {
+                                    if display[((y + i) as usize)][(x + j) as usize] {
+                                        registers[0x0F] = 1;
+                                    }
+                                    display[(y + i) as usize][(x + j) as usize] ^= true;
                                 }
-                                display[(y + i) as usize][(x + j) as usize] ^= true;
                             }
                         }
                     }
-
                     program_counter += 2;
+                }
+                0xE000..=0xEFFF => {
+                    let bytes = opcode.to_be_bytes();
+                    match bytes[1] {
+                        0x9E => {
+                            let register_number = bytes[0] & 0x0F;
+
+                            if !keys[registers[register_number as usize] as usize] {
+                                program_counter += 2;
+                            }
+                            program_counter += 2;
+                        }
+                        0xA1 => {
+                            let register_number = bytes[0] & 0x0F;
+
+                            if !keys[registers[register_number as usize] as usize] {
+                                program_counter += 2;
+                            }
+                            program_counter += 2;
+                        }
+                        _ => panic!("E input didn't match anything. Opcode: {opcode:#04X}"),
+                    }
                 }
                 0xF000..=0xFFFF => {
                     let bytes = opcode.to_be_bytes();
                     match bytes[1] {
+                        0x07 => {
+                            let register_number = bytes[0] & 0x0F;
+                            registers[register_number as usize] = delay_timer;
+
+                            program_counter += 2;
+                        }
                         0x0A => {
-                            // let register_number = bytes[0] & 0x0F;
+                            loop {
+                                let event = window.wait_event();
+                                if let Some(Button::Keyboard(key)) = event.press_args() {
+                                    if [
+                                        Key::D1,
+                                        Key::D2,
+                                        Key::D3,
+                                        Key::D4,
+                                        Key::Q,
+                                        Key::W,
+                                        Key::E,
+                                        Key::R,
+                                        Key::A,
+                                        Key::S,
+                                        Key::D,
+                                        Key::F,
+                                        Key::Z,
+                                        Key::X,
+                                        Key::C,
+                                        Key::V,
+                                    ]
+                                    .contains(&key)
+                                    {
+                                        let register_number = bytes[0] & 0x0F;
+                                        match &key {
+                                            Key::D1 => registers[register_number as usize] = 0x1,
+                                            Key::D2 => registers[register_number as usize] = 0x2,
+                                            Key::D3 => registers[register_number as usize] = 0x3,
+                                            Key::D4 => registers[register_number as usize] = 0xC,
+                                            Key::Q => registers[register_number as usize] = 0x4,
+                                            Key::W => registers[register_number as usize] = 0x5,
+                                            Key::E => registers[register_number as usize] = 0x6,
+                                            Key::R => registers[register_number as usize] = 0xD,
+                                            Key::A => registers[register_number as usize] = 0x7,
+                                            Key::S => registers[register_number as usize] = 0x8,
+                                            Key::D => registers[register_number as usize] = 0x9,
+                                            Key::F => registers[register_number as usize] = 0xE,
+                                            Key::Z => registers[register_number as usize] = 0xA,
+                                            Key::X => registers[register_number as usize] = 0x0,
+                                            Key::C => registers[register_number as usize] = 0xB,
+                                            Key::V => registers[register_number as usize] = 0xF,
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+
                             program_counter += 2;
                         }
                         0x15 => {
-                            // let register_number = bytes[0] & 0x0F;
+                            let register_number = bytes[0] & 0x0F;
+                            delay_timer = registers[register_number as usize];
                             program_counter += 2;
                         }
                         0x18 => {
-                            // let register_number = bytes[0] & 0x0F;
+                            let register_number = bytes[0] & 0x0F;
+                            sound_timer = registers[register_number as usize];
                             program_counter += 2;
                         }
                         0x29 => {
@@ -335,6 +456,18 @@ fn main() {
                     panic!("input didn't match anything. Opcode: {opcode:#04X}");
                 }
             }
+
+            if delay_timer > 0 {
+                delay_timer -= 1;
+            }
+            if sound_timer > 0 {
+                if sound_timer == 1 {
+                    println!("BEEP!");
+                }
+                sound_timer -= 1;
+            }
+
+            // keys = [false; 16];
         }
     }
 }
