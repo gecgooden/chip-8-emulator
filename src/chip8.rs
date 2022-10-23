@@ -394,6 +394,7 @@ type Address = u16;
 
 type RegisterNumber = u8;
 
+#[derive(Debug, PartialEq)]
 enum Instruction {
     ClearDisplay,
     Return,
@@ -429,4 +430,32 @@ enum Instruction {
     StoreBCD(RegisterNumber),
     StoreRegisters(RegisterNumber),
     LoadRegisters(RegisterNumber),
+}
+
+#[test]
+fn instruction_parsing() {
+    assert_eq!(Chip8::parse_instruction(0x00E0), Instruction::ClearDisplay);
+
+    assert_eq!(Chip8::parse_instruction(0x00EE), Instruction::Return);
+
+    assert_eq!(Chip8::parse_instruction(0x1000), Instruction::Jump(0x0000));
+    assert_eq!(Chip8::parse_instruction(0x1234), Instruction::Jump(0x0234));
+    assert_eq!(Chip8::parse_instruction(0x1FFF), Instruction::Jump(0x0FFF));
+
+    assert_eq!(Chip8::parse_instruction(0x2000), Instruction::Call(0x0000));
+    assert_eq!(Chip8::parse_instruction(0x2234), Instruction::Call(0x0234));
+    assert_eq!(Chip8::parse_instruction(0x2FFF), Instruction::Call(0x0FFF));
+
+    assert_eq!(
+        Chip8::parse_instruction(0x3000),
+        Instruction::SkipEqualK(0, 0x00)
+    );
+    assert_eq!(
+        Chip8::parse_instruction(0x3234),
+        Instruction::SkipEqualK(2, 0x34)
+    );
+    assert_eq!(
+        Chip8::parse_instruction(0x3FFF),
+        Instruction::SkipEqualK(15, 0xFF)
+    );
 }
