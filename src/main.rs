@@ -77,8 +77,7 @@ fn main() {
 
     let rom = fs::read(rom_path).expect("error reading rom file");
 
-    let mut chip8 = Chip8::new();
-    chip8.load_rom(rom);
+    let mut chip8 = Chip8::new().load_rom(rom);
 
     let mut events = Events::new(EventSettings::new());
     events.set_ups(500);
@@ -126,7 +125,7 @@ fn main() {
                     }
                 }
             };
-            chip8.execute_cycle(wait_key_closure);
+            chip8 = chip8.execute_cycle(wait_key_closure);
         }
     }
 }

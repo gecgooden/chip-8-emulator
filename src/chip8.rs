@@ -61,10 +61,13 @@ impl Chip8 {
         return self.display_buffer;
     }
 
-    pub fn load_rom(&mut self, rom: Vec<u8>) {
+    pub fn load_rom(self, rom: Vec<u8>) -> Chip8 {
+        let mut memory = self.memory.clone();
         for (index, byte) in rom.iter().enumerate() {
-            self.memory[512 + index] = byte.clone();
+            memory[512 + index] = byte.clone();
         }
+
+        return Chip8 { memory, ..self };
     }
 
     fn get_byte_from_memory(&self, address: u16) -> u8 {
@@ -87,7 +90,7 @@ impl Chip8 {
         return self.keys[index as usize];
     }
 
-    pub fn execute_cycle<F>(&mut self, wait_for_input: F)
+    pub fn execute_cycle<F>(self, wait_for_input: F) -> Chip8
     where
         F: FnOnce() -> u8,
     {
@@ -98,32 +101,57 @@ impl Chip8 {
 
         match Chip8::parse_instruction(opcode) {
             Instruction::ClearDisplay => {
-                self.display_buffer = [[false; 64]; 32];
-                self.program_counter += 2;
+                return Chip8 {
+                    display_buffer: [[false; 64]; 32],
+                    program_counter: self.program_counter + 2,
+                    ..self
+                }
             }
             Instruction::Return => {
-                let address = self.stack.pop().unwrap();
-                self.program_counter = address;
-                self.program_counter += 2;
+                let mut stack = self.stack.clone();
+                let address = stack.pop().unwrap();
+                return Chip8 {
+                    program_counter: address + 2,
+                    stack: stack.clone(),
+                    ..self
+                };
             }
             Instruction::Jump(address) => {
-                self.program_counter = address;
+                return Chip8 {
+                    program_counter: address,
+                    ..self
+                }
             }
             Instruction::Call(address) => {
-                self.stack.push(self.program_counter.clone());
-                self.program_counter = address;
+                let stack = self.stack.clone();
+                stack.push(self.program_counter);
+                return Chip8 {
+                    program_counter: address,
+                    stack,
+                    ..self
+                };
             }
             Instruction::SkipEqualK(register, value) => {
-                if self.get_register_value(register) == value {
-                    self.program_counter += 2;
-                }
-                self.program_counter += 2;
+                let jumpSize = if self.registers[register as usize] == value {
+                    4
+                } else {
+                    2
+                };
+                return Chip8 {
+                    program_counter: self.program_counter + jumpSize,
+                    ..self
+                };
             }
             Instruction::SkipNotEqualK(register, value) => {
-                if self.get_register_value(register) != value {
-                    self.program_counter += 2;
-                }
-                self.program_counter += 2;
+                let jumpSize = if self.registers[register as usize] != value {
+                    4
+                } else {
+                    2
+                };
+                return Chip8 {
+                    program_counter: self.program_counter + jumpSize,
+                    ..self
+                };
             }
             Instruction::SkipEqual(x, y) => {
                 if self.get_register_value(x) == self.get_register_value(y) {
@@ -335,6 +363,8 @@ impl Chip8 {
         if self.sound_timer > 0 {
             self.sound_timer -= 1;
         }
+
+        return self;
     }
 
     fn parse_instruction(opcode: u16) -> Instruction {
