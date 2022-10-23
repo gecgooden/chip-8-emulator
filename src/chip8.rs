@@ -289,7 +289,10 @@ impl Chip8 {
                 self.sound_timer = self.get_register_value(x);
                 self.program_counter += 2;
             }
-            Instruction::AddToI(_) => todo!(),
+            Instruction::AddToI(x) => {
+                self.index_register += self.get_register_value(x) as u16;
+                self.program_counter += 2;
+            }
             Instruction::LoadHexGlyph(x) => {
                 self.index_register = self.get_register_value(x) as u16 * 5;
                 self.program_counter += 2;
