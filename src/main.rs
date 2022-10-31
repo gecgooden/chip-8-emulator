@@ -118,15 +118,14 @@ fn main() {
         }
 
         if let Some(_args) = e.update_args() {
-            let wait_key_closure = || loop {
+            chip8.execute_cycle(|| loop {
                 let event = window.wait_event();
                 if let Some(Button::Keyboard(key)) = event.press_args() {
                     if let Some(index) = map_key_to_index(key) {
                         return index;
                     }
                 }
-            };
-            chip8.execute_cycle(wait_key_closure);
+            });
         }
     }
 }
